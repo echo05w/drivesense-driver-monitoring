@@ -9,7 +9,7 @@ plan the project is being carried through.
 |---|---|---|---|
 | 1 | Project/rubric analysis | **Done** | `docs/Rubric_Alignment.md` |
 | 2 | Individual Project Brief | **Drafted, PENDING_MENTOR_APPROVAL** | `docs/Individual_Project_Brief.md` |
-| 3 | Dataset research and acquisition | **Research done; notebook ready; execution blocked on Kaggle credentials** | `docs/Dataset_Research.md`, `scripts/download_data.py`, `notebooks/01_Data_Acquisition_and_EDA.ipynb` §0-1 — needs a real `kaggle.json` (local or Colab) to actually pull data |
+| 3 | Dataset research and acquisition | **BLOCKED_EXTERNAL (both datasets) as of this session** | State Farm: still `BLOCKED_EXTERNAL` pending the account owner's one-time click-through of the competition rules on kaggle.com (unchanged). UTA-RLDD: the previous session's "downloading" claim did **not** complete — the interrupted session left a 1.5 GB file that fails zip-integrity validation, plus Kaggle's own `.kaggle-partial` resume marker (see `docs/Dataset_Research.md` acquisition log, corrected this session). **This session additionally verified `KAGGLE_API_TOKEN` / `~/.kaggle/` are absent entirely** (no env var, no token file) — the previous session's authenticated state was session-scoped and did not persist. Network connectivity itself is confirmed working (`curl`, DNS, `ping` all succeed) — the blocker is credentials only, not connectivity. Browser/Colab automation was also checked and is not connected in this environment, so it cannot be used to route around the missing local credentials. **Needs the user to place a valid Kaggle token at `~/.kaggle/kaggle.json` (or export `KAGGLE_API_TOKEN`) in this environment**, and separately to accept the State Farm competition rules on kaggle.com, before acquisition can proceed. |
 | 4 | EDA | **Notebook structure ready; not yet executed** | `notebooks/01_Data_Acquisition_and_EDA.ipynb` §2-4 — class balance, subject counts, sample grids, corruption checks scaffolded; drowsiness section intentionally raises `NotImplementedError` until real file layout is confirmed (no guessed schema) |
 | 5 | Preprocessing | **Mostly implemented, partially verified** | `src/drivesense/features/landmarks.py` (EAR/MAR/head-pose-proxy extraction against the verified-correct MediaPipe Tasks API) + `src/drivesense/data/datasets.py` (`DistractionImageDataset`, `make_feature_windows`/`FeatureWindowDataset` for temporal windowing). Pure-logic parts fully unit-tested (12/12 passing: `tests/test_landmarks.py` 5, `tests/test_datasets.py` 7 — includes a synthetic-data test proving windows never cross a subject/group boundary). Full `MediaPipeLandmarkExtractor.extract()` graph construction could NOT be run to completion locally (OOM-killed, exit 137, due to desktop memory pressure on this machine — see `docs/LEARNING_LOG.md`); needs verification in Colab or under more local headroom via `scripts/verify_landmarks_extractor.py`. NOT marked done overall — real-data run still pending #3. |
 | 6 | Subject-independent train/val/test splitting | **Implemented & verified** | `src/drivesense/data/splits.py`, `assert_no_subject_leakage`; 4/4 tests passing on synthetic data (`tests/test_splits.py`). Real dataset run still depends on #3. |
@@ -85,13 +85,42 @@ plan the project is being carried through.
 As of this note: **Phase 3 (finish dataset acquisition)** — the acquisition
 script (`scripts/download_data.py`) and Colab notebook
 (`notebooks/01_Data_Acquisition_and_EDA.ipynb`) are ready; the remaining work
-is either (a) placing a real `kaggle.json` in this environment, or (b)
-running that notebook in Colab with the student's own Kaggle login — both
-are genuine external dependencies (a Kaggle account/token only the student
-can provide), not something further local scaffolding can resolve. All
-architecture-level work not blocked on real data (models, splitting, risk
-engine, feature-extraction code) has been completed and verified in the
-meantime — see phases 5–10, 19, 22 above.
+is either (a) placing a real `kaggle.json`/`KAGGLE_API_TOKEN` in this
+environment, or (b) running that notebook in Colab with the student's own
+Kaggle login — both are genuine external dependencies (a Kaggle account/
+token only the student can provide), not something further local scaffolding
+can resolve. All architecture-level work not blocked on real data (models,
+splitting, risk engine, feature-extraction code) has been completed and
+verified in the meantime — see phases 5–10, 19, 22 above. **Do not add more
+scaffolding/docs while this is blocked** — the honest next step is to wait
+for credentials, not generate more architecture around already-complete
+architecture.
+
+## Recovery note (2026-09-16, second session — verification of prior session's claims)
+
+This session's start-of-session checklist caught two things the previous
+session's status text got ahead of reality on, consistent with the
+`LEARNING_LOG.md` lesson about not trusting status docs without spot-checks:
+
+1. `docs/Master_Plan_Status.md`/`docs/Dataset_Research.md` had uncommitted
+   changes claiming UTA-RLDD "downloading"/"proceeded successfully" — the
+   actual file on disk is a 1.5 GB partial that fails zip validation
+   (session was interrupted mid-download). Corrected in both files; the
+   partial file itself was kept (not deleted) since it's resumable.
+2. The same docs implied Kaggle auth was live; this session verified no
+   `KAGGLE_API_TOKEN` env var and no `~/.kaggle/` directory exist here —
+   auth was session-scoped and did not carry over.
+
+Also this session: re-ran the full test suite (37/37 pass; one transient
+network-timing failure on first run, passed on isolated re-run), re-attempted
+`scripts/verify_landmarks_extractor.py` with more free memory than the prior
+OOM (902 MiB vs. ~490 MiB free) — still OOM-killed (exit 137), so phase 5's
+full-extractor verification remains genuinely blocked locally, not a flake.
+Checked for browser/Colab automation availability (not connected in this
+environment) and for alternate local credential sources (no secret-manager
+CLIs, no stray `kaggle.json` anywhere under `$HOME`) — confirmed there is no
+local path around the credential/consent blockers other than the user
+providing them.
 
 ## Recovery note (2026-09-16, session interruption)
 

@@ -49,6 +49,21 @@ library whose API may have moved on since training data was collected,
 inspect the actually-installed version's real surface before writing code
 against it.**
 
+## 2026-09-16 — "Download command returned success" is not "the file is valid"; verify the artifact itself
+
+A prior session recorded UTA-RLDD as "proceeded successfully" after issuing
+`kaggle datasets download`, but the session was interrupted mid-transfer
+before that claim was checked. The next session found a 1.5 GB file that
+fails `zipfile` integrity validation, plus Kaggle's own `.kaggle-partial`
+resume marker still sitting next to it — i.e. the download never finished,
+despite the doc saying it had. **Lesson: a command starting successfully
+(no immediate error) is not evidence it finished — for downloads
+specifically, validate the resulting artifact (file size against the
+expected dataset size, archive integrity, checksum) before writing
+"acquired"/"succeeded" anywhere.** Also: don't delete a partial download
+just because it's currently invalid — Kaggle's `.kaggle-partial` marker
+means the CLI can resume it, so deleting it would discard real progress.
+
 ## 2026-09-16 — Constructing MediaPipe's FaceLandmarker graph gets OOM-killed on this desktop machine
 
 `MediaPipeLandmarkExtractor()` construction was killed by the OS (exit 137)
