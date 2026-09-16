@@ -1,0 +1,38 @@
+# Data (never commit raw or processed driver imagery/video)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model artifacts (large binary files; document how to regenerate instead)
+models/*
+!models/.gitkeep
+
+# Experiment tracking outputs
+experiments/*
+!experiments/.gitkeep
+mlruns/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Credentials — never commit
+kaggle.json
+.kaggle/
+*.env
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp
+
+# Jupyter
+*.ipynb_checkpoints

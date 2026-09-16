@@ -1,0 +1,27 @@
+# Core
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.4
+matplotlib>=3.8
+seaborn>=0.13
+
+# Computer vision / face landmarks
+opencv-python-headless>=4.9
+mediapipe>=0.10
+
+# Deep learning (CPU-friendly install locally; use Colab's preinstalled CUDA build for GPU training)
+torch>=2.2
+torchvision>=0.17
+
+# Experiment tracking
+mlflow>=2.11
+
+# Data acquisition
+kaggle>=1.6
+
+# Notebooks
+jupyter>=1.0
+ipykernel>=6.29
+
+# Testing
+pytest>=8.0
