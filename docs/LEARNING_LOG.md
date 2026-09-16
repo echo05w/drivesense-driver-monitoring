@@ -35,3 +35,30 @@ because `TransferLearningCNN` was actually imported and run (raised
 `ModuleNotFoundError`), not by reading the requirements file. **Lesson:
 "it's in requirements.txt" is not evidence a module works — run the actual
 import/instantiation.**
+
+## 2026-09-16 — MediaPipe's API changed; verify against the installed version, not memory
+
+The installed `mediapipe==1.0.1` does not expose the older
+`mp.solutions.face_mesh` API that most existing tutorials/training data
+assume — only the newer Tasks API (`mediapipe.tasks.python.vision.FaceLandmarker`,
+which needs a separately downloaded `.task` model bundle). This was caught by
+running `dir(mediapipe)` / `dir(mediapipe.tasks.python.vision)` directly
+before writing `src/drivesense/features/landmarks.py`, rather than writing
+code against a remembered API and finding out later. **Lesson: for any
+library whose API may have moved on since training data was collected,
+inspect the actually-installed version's real surface before writing code
+against it.**
+
+## 2026-09-16 — Constructing MediaPipe's FaceLandmarker graph gets OOM-killed on this desktop machine
+
+`MediaPipeLandmarkExtractor()` construction was killed by the OS (exit 137)
+on this machine, with `free -h` showing ~490 MB free RAM at the time —
+consumed by the user's own Chrome/desktop session (confirmed via
+`ps aux --sort=-%mem`), not a bug in this project's code. This is a genuine
+external resource constraint on a shared desktop machine, not something to
+route around by e.g. killing the user's browser processes. **Lesson: when a
+subprocess is SIGKILL'd (exit 137) rather than raising a Python exception,
+suspect OOM first (check `free -h` / `ps aux --sort=-%mem`) before assuming
+a code bug — and don't put a test that can OOM-kill the whole interpreter
+into the automated suite; verify it manually instead** (see
+`scripts/verify_landmarks_extractor.py`).

@@ -11,14 +11,14 @@ plan the project is being carried through.
 | 2 | Individual Project Brief | **Drafted, PENDING_MENTOR_APPROVAL** | `docs/Individual_Project_Brief.md` |
 | 3 | Dataset research and acquisition | **Research done; notebook ready; execution blocked on Kaggle credentials** | `docs/Dataset_Research.md`, `scripts/download_data.py`, `notebooks/01_Data_Acquisition_and_EDA.ipynb` §0-1 — needs a real `kaggle.json` (local or Colab) to actually pull data |
 | 4 | EDA | **Notebook structure ready; not yet executed** | `notebooks/01_Data_Acquisition_and_EDA.ipynb` §2-4 — class balance, subject counts, sample grids, corruption checks scaffolded; drowsiness section intentionally raises `NotImplementedError` until real file layout is confirmed (no guessed schema) |
-| 5 | Preprocessing | Not started | Depends on #3 |
-| 6 | Subject-independent train/val/test splitting | Not started | Design decided in Brief §7; implementation depends on #3 |
-| 7 | Baseline | Not started | Design decided in Brief §7 |
-| 8 | Deep learning models | Not started | |
-| 9 | Transfer learning | Not started | |
-| 10 | Temporal modeling | Not started | For drowsiness sequence model |
-| 11 | Distraction model | Not started | |
-| 12 | Drowsiness model | Not started | |
+| 5 | Preprocessing | **Partially implemented, partially verified** | `src/drivesense/features/landmarks.py` (EAR/MAR/head-pose-proxy extraction against the verified-correct MediaPipe Tasks API). Pure-logic parts unit-tested (5/5 passing, `tests/test_landmarks.py`). Full `MediaPipeLandmarkExtractor.extract()` graph construction could NOT be run to completion locally (OOM-killed, exit 137, due to desktop memory pressure on this machine — see `docs/LEARNING_LOG.md`); needs verification in Colab or under more local headroom via `scripts/verify_landmarks_extractor.py`. NOT marked done. |
+| 6 | Subject-independent train/val/test splitting | **Implemented & verified** | `src/drivesense/data/splits.py`, `assert_no_subject_leakage`; 4/4 tests passing on synthetic data (`tests/test_splits.py`). Real dataset run still depends on #3. |
+| 7 | Baseline | **Code implemented, not yet run on real data** | `src/drivesense/models/baseline.py` (logistic regression + random forest pipelines). Not trained — depends on #3. |
+| 8 | Deep learning models | **Architectures implemented & smoke-tested, NOT trained** | `src/drivesense/models/cnn.py` (`SimpleCNN`); forward pass + single optimizer step verified on synthetic tensors (`tests/test_models_cnn.py`, 3/3 passing). No training/evaluation has happened — do not treat as a completed model. |
+| 9 | Transfer learning | **Architecture implemented & manually verified to construct/forward, NOT trained** | `src/drivesense/models/cnn.py` (`TransferLearningCNN`, MobileNetV3-Small backbone). Manually verified: downloads real pretrained ImageNet weights, forward pass produces correct output shape, `unfreeze_backbone()` correctly increases trainable-parameter count (932,778 vs. 5,770 frozen). Excluded from the default fast test suite (downloads weights over the network) — verified once interactively, not on every `pytest` run. Not fine-tuned on any real data yet. |
+| 10 | Temporal modeling | **Architectures implemented & smoke-tested, NOT trained** | `src/drivesense/models/temporal.py` (`DrowsinessGRU`, `DrowsinessTemporalCNN`); forward pass + single optimizer step verified for both, including bidirectional GRU and variable sequence lengths (`tests/test_models_temporal.py`, 6/6 passing). No training/evaluation has happened. |
+| 11 | Distraction model | Not started (training) | Architecture ready (#8/#9); needs dataset (#3) before real training can start |
+| 12 | Drowsiness model | Not started (training) | Architecture ready (#10); needs dataset (#3) and a working landmark extractor (#5) before real training can start |
 | 13 | Experiments | Not started | |
 | 14 | Experiment tracking | Not started | Plan: MLflow (local, file-based) or equivalent structured run log |
 | 15 | Evaluation on unseen data | Not started | |
@@ -28,7 +28,7 @@ plan the project is being carried through.
 | 19 | Temporal risk engine | Not started | Fuses both model outputs; not a trained model itself |
 | 20 | Real-time webcam/video inference | Not started | |
 | 21 | Classroom demo | Not started | Colab-first per rubric |
-| 22 | Tests | **16/16 passing (verified)** | `tests/test_geometry.py`, `tests/test_splits.py`, `tests/test_risk_engine.py` — run via `.venv` + `pytest`; covers EAR/MAR math, subject-independent split leakage checks, and the risk-fusion state machine, all with synthetic fixtures (not real dataset results) |
+| 22 | Tests | **30/30 passing (verified)** | `tests/test_geometry.py`, `tests/test_splits.py`, `tests/test_risk_engine.py`, `tests/test_models_cnn.py`, `tests/test_models_temporal.py`, `tests/test_landmarks.py` — run via `.venv` + `pytest`; all synthetic fixtures/shape checks (not real dataset results) |
 | 23 | Google Colab workflow/training where available | Planned | Required given no local GPU — see environment note below |
 | 24 | Documentation | In progress | This tracker + brief + rubric alignment + dataset research + responsible AI stub |
 | 25 | README | Initial draft done | `README.md` — will be expanded as results land |
@@ -41,10 +41,14 @@ plan the project is being carried through.
 
 ## Environment notes (recorded 2026-09-16)
 
-- Local machine: no GPU (`nvidia-smi` not present), no `torch`/`opencv`/`mediapipe`
-  installed, Python 3.14.7. Suitable for scaffolding, docs, lightweight EDA
-  (once core packages are installed), and writing training/inference code —
-  **not** suitable for actual model training at reasonable speed.
+- Local machine: no GPU (`nvidia-smi` not present), Python 3.14.7, Arch Linux
+  (externally-managed system Python — project uses its own `.venv`).
+  `torch`, `torchvision`, `opencv-python-headless`, and `mediapipe` are now
+  installed in `.venv` and verified importable/runnable (CNN/temporal model
+  forward+backward passes confirmed; MediaPipe Tasks API confirmed present).
+  Still **not** suitable for actual full-dataset model training at
+  reasonable speed (no GPU), and memory-constrained for MediaPipe's graph
+  construction alongside normal desktop usage (see blocker #4 below).
 - `gh` CLI is authenticated as `echo05w` (same GitHub account as GOV-01),
   internet access confirmed.
 - No Kaggle CLI/credentials configured locally (`~/.kaggle/kaggle.json`
@@ -64,14 +68,30 @@ plan the project is being carried through.
 3. **No local GPU** — actual training runs must happen in Google Colab;
    local work is limited to CPU-feasible tasks (code, light EDA on small
    samples, unit tests).
+4. **Local memory pressure blocks the MediaPipe FaceLandmarker graph.**
+   Verified 2026-09-16: constructing `MediaPipeLandmarkExtractor` was
+   OS-killed (exit 137) with `free -h` showing ~490 MB free RAM, consumed by
+   the user's own desktop session (multiple Chrome renderer processes,
+   confirmed via `ps aux --sort=-%mem` — not a leak in this project's code,
+   and not something this project should try to kill/manage). Mitigation:
+   the pure-logic parts of the feature-extraction code are unit-tested
+   separately (`tests/test_landmarks.py`); full extractor verification is
+   deferred to Google Colab or a lower-memory-pressure moment, via
+   `scripts/verify_landmarks_extractor.py`. Does not block model
+   architecture work, dataset research, or documentation.
 
 ## Next incomplete highest-priority task
 
 As of this note: **Phase 3 (finish dataset acquisition)** — the acquisition
-script (`scripts/download_data.py`) and docs are ready; the remaining work is
-either (a) placing a real `kaggle.json` in this environment, or (b) building
-`notebooks/01_Data_Acquisition.ipynb` to run the same acquisition from Colab
-with the student's own Kaggle login, so Phase 4 (EDA) can start on real data.
+script (`scripts/download_data.py`) and Colab notebook
+(`notebooks/01_Data_Acquisition_and_EDA.ipynb`) are ready; the remaining work
+is either (a) placing a real `kaggle.json` in this environment, or (b)
+running that notebook in Colab with the student's own Kaggle login — both
+are genuine external dependencies (a Kaggle account/token only the student
+can provide), not something further local scaffolding can resolve. All
+architecture-level work not blocked on real data (models, splitting, risk
+engine, feature-extraction code) has been completed and verified in the
+meantime — see phases 5–10, 19, 22 above.
 
 ## Recovery note (2026-09-16, session interruption)
 
