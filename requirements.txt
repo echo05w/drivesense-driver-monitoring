@@ -8,6 +8,7 @@ seaborn>=0.13
 # Computer vision / face landmarks
 opencv-python-headless>=4.9
 mediapipe>=0.10
+Pillow>=10.0
 
 # Deep learning (CPU-friendly install locally; use Colab's preinstalled CUDA build for GPU training)
 torch>=2.2
