@@ -97,11 +97,18 @@ GRU/1D-CNN model. See `docs/Individual_Project_Brief.md` §7 and
 ## Installation instructions
 
 ```bash
-git clone <this-repository-url>
-cd DriveSense
+git clone https://github.com/echo05w/drivesense-driver-monitoring.git
+cd drivesense-driver-monitoring
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .   # makes the `drivesense` package importable for tests/notebooks
+```
+
+Run the test suite (currently covers geometry/EAR-MAR math, subject-independent splitting, and the risk-fusion engine — 16/16 passing as of the last verified run):
+
+```bash
+pytest
 ```
 
 ## Dataset acquisition

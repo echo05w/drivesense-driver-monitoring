@@ -9,8 +9,8 @@ plan the project is being carried through.
 |---|---|---|---|
 | 1 | Project/rubric analysis | **Done** | `docs/Rubric_Alignment.md` |
 | 2 | Individual Project Brief | **Drafted, PENDING_MENTOR_APPROVAL** | `docs/Individual_Project_Brief.md` |
-| 3 | Dataset research and acquisition | **Research done; acquisition blocked locally** | `docs/Dataset_Research.md`; needs Kaggle credentials (local or Colab) to actually pull data — see blocker note |
-| 4 | EDA | Not started | Depends on #3 |
+| 3 | Dataset research and acquisition | **Research done; notebook ready; execution blocked on Kaggle credentials** | `docs/Dataset_Research.md`, `scripts/download_data.py`, `notebooks/01_Data_Acquisition_and_EDA.ipynb` §0-1 — needs a real `kaggle.json` (local or Colab) to actually pull data |
+| 4 | EDA | **Notebook structure ready; not yet executed** | `notebooks/01_Data_Acquisition_and_EDA.ipynb` §2-4 — class balance, subject counts, sample grids, corruption checks scaffolded; drowsiness section intentionally raises `NotImplementedError` until real file layout is confirmed (no guessed schema) |
 | 5 | Preprocessing | Not started | Depends on #3 |
 | 6 | Subject-independent train/val/test splitting | Not started | Design decided in Brief §7; implementation depends on #3 |
 | 7 | Baseline | Not started | Design decided in Brief §7 |
@@ -33,7 +33,7 @@ plan the project is being carried through.
 | 24 | Documentation | In progress | This tracker + brief + rubric alignment + dataset research + responsible AI stub |
 | 25 | README | Initial draft done | `README.md` — will be expanded as results land |
 | 26 | Responsible AI | Initial draft done | `docs/Responsible_AI.md`, to be revised with EDA evidence |
-| 27 | Git/GitHub | In progress | Initializing DriveSense's own independent git repo now (was nested inside an unrelated `~` repo before this fix) |
+| 27 | Git/GitHub | **Done (verified)** | Independent local repo initialized (branch `main`), initial commit `d12d194`, pushed to `https://github.com/echo05w/drivesense-driver-monitoring` (private). Verified separate from GOV-01's remote and history; GOV-01 re-checked clean/unchanged after this work. |
 | 28 | Defense guide | Not started | |
 | 29 | Presentation preparation | Not started | |
 | 30 | Final rubric audit | Not started | |
@@ -67,10 +67,11 @@ plan the project is being carried through.
 
 ## Next incomplete highest-priority task
 
-As of this note: **Phase 3 (finish dataset acquisition)** — install local
-Python ML dependencies, then either configure local Kaggle credentials or
-move straight to a Colab notebook that authenticates and pulls both
-datasets, so Phase 4 (EDA) can start on real data.
+As of this note: **Phase 3 (finish dataset acquisition)** — the acquisition
+script (`scripts/download_data.py`) and docs are ready; the remaining work is
+either (a) placing a real `kaggle.json` in this environment, or (b) building
+`notebooks/01_Data_Acquisition.ipynb` to run the same acquisition from Colab
+with the student's own Kaggle login, so Phase 4 (EDA) can start on real data.
 
 ## Recovery note (2026-09-16, session interruption)
 
