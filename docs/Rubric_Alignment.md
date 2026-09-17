@@ -14,11 +14,11 @@ reproducible docs, attended defense).
 | # | Criterion | Max | Bare Min | DriveSense Plan | Status |
 |---|---|---|---|---|---|
 | 1 | Problem Definition & Project Alignment | 10 | 6 | Individual Project Brief (`Individual_Project_Brief.md`) defines problem, stakeholder, ML task framing (2 classification tasks + fusion), measurable success criteria (Section 10 acceptance criteria) | Brief drafted, PENDING_MENTOR_APPROVAL |
-| 2 | Data & Preprocessing Pipeline | 15 | 9 | Dataset research (`Dataset_Research.md`), subject-independent split by driver ID, EDA notebook, face-landmark feature extraction (EAR/MAR/head-pose), leakage checks | Not started — blocked on dataset acquisition |
-| 3 | Modeling & Experiments | 20 | 12 | Baseline (engineered features + simple classifier), CNN from scratch, transfer-learning CNN, temporal model (GRU/1D-CNN) for drowsiness; ≥2 approaches compared per task | Not started |
-| 4 | Evaluation & Error Analysis | 15 | 9 | Macro F1 / per-class recall / confusion matrices on held-out subject-independent test set; comparison vs. baseline; qualitative error analysis (misclassified frames, edge cases: glasses, low light) | Not started |
-| 5 | End-to-End Implementation & Delivery | 20 | 12 | Full frame-in → risk-out pipeline; Colab-first reproducible demo (webcam + video upload); saved model/preprocessing artifacts; input validation (no-face-detected case) | Not started |
-| 6 | Documentation & Reproducibility | 10 | 6 | README with all rubric-required sections (see checklist below); clear setup/run/Colab instructions; logical repo layout | README drafted (initial) |
+| 2 | Data & Preprocessing Pipeline | 15 | 9 | Dataset research (`Dataset_Research.md`), subject-independent split by driver ID, EDA notebook, face-landmark feature extraction (EAR/MAR/head-pose), leakage checks | **Distraction: done with real data** — real EDA (22,424 images, 0 corrupt, dimensions/imbalance checked), driver-independent split with passing leakage assertions on both subject and image path. **Drowsiness: acquisition in progress** (small real selective sample downloading; MediaPipe feature extraction code exists but full extractor still blocked by local memory constraints, see `Master_Plan_Status.md`) |
+| 3 | Modeling & Experiments | 20 | 12 | Baseline (engineered features + simple classifier), CNN from scratch, transfer-learning CNN, temporal model (GRU/1D-CNN) for drowsiness; ≥2 approaches compared per task | **Distraction: 3 real trained/evaluated models** (from-scratch CNN, frozen transfer learning, fine-tuned transfer learning) on real data, real comparison written up including an honest validation-vs-test nuance. **Drowsiness: not started** — architectures exist and are smoke-tested but not trained on real data |
+| 4 | Evaluation & Error Analysis | 15 | 9 | Macro F1 / per-class recall / confusion matrices on held-out subject-independent test set; comparison vs. baseline; qualitative error analysis (misclassified frames, edge cases: glasses, low light) | **Distraction: done** — real per-class precision/recall/F1, confusion matrices, and balanced accuracy for all 3 models on the untouched test set; qualitative error analysis backed by actually viewing real misclassified images (not just the matrix); real robustness re-evaluation under lighting/blur/noise/JPEG perturbations. **Drowsiness: not started** |
+| 5 | End-to-End Implementation & Delivery | 20 | 12 | Full frame-in → risk-out pipeline; Colab-first reproducible demo (webcam + video upload); saved model/preprocessing artifacts; input validation (no-face-detected case) | Not started — needs a trained drowsiness model and temporal risk fusion before an end-to-end demo is meaningful; distraction inference alone could be wired up sooner |
+| 6 | Documentation & Reproducibility | 10 | 6 | README with all rubric-required sections (see checklist below); clear setup/run/Colab instructions; logical repo layout | README now contains real distraction results, real dataset/training/evaluation instructions matching the actual scripts. Drowsiness sections still pending real training |
 | 7 | Responsible AI & Limitations | 5 | 3 | `Responsible_AI.md`: bias/fairness (skin tone, eyewear, camera angle coverage in datasets), privacy (biometric data handling, no third-party footage), stated non-medical-device limitation | Stub created, to be filled in with dataset-specific findings after EDA |
 | 8 | Presentation, Demo & Q&A | 5 | 3 | Slide deck + live Colab demo at defense | Not started (final phase) |
 
@@ -26,22 +26,22 @@ reproducible docs, attended defense).
 
 The rubric requires the README to contain, verbatim as a checklist:
 
-- [ ] Project title
-- [ ] Problem statement
-- [ ] Selected project track (Track 1 — Individual)
-- [ ] Dataset source
-- [ ] ML task type
-- [ ] Project pipeline / system architecture
-- [ ] Models or approaches tested
-- [ ] Final model and justification
-- [ ] Evaluation metrics and results
-- [ ] Installation instructions
-- [ ] Training / fine-tuning instructions
-- [ ] Demo and inference run instructions (Colab-first)
-- [ ] Example input and output
+- [x] Project title
+- [x] Problem statement
+- [x] Selected project track (Track 1 — Individual)
+- [x] Dataset source
+- [x] ML task type
+- [x] Project pipeline / system architecture
+- [x] Models or approaches tested — real, for distraction; drowsiness pending
+- [x] Final model and justification — distraction only; overall system pending
+- [x] Evaluation metrics and results — real, for distraction; drowsiness pending
+- [x] Installation instructions
+- [x] Training / fine-tuning instructions — real commands, distraction only
+- [ ] Demo and inference run instructions (Colab-first) — pending drowsiness + fusion
+- [ ] Example input and output — pending demo
 - [ ] Known limitations
 - [ ] Responsible AI considerations
-- [ ] Student's full name
+- [x] Student's full name
 
 ## Essential (non-numeric, pass/fail) requirements — Section 4 of rubric
 
