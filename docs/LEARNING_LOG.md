@@ -65,6 +65,56 @@ visually distinct classes.
   epochs before early stopping, and compare against the transfer-learning
   model before picking a "best" model.
 
+## 2026-09-17 — Experiment A vs B: validation-set "winner" isn't always the better generalizer
+
+**What it is:** Experiment B, `TransferLearningCNN` with a frozen
+MobileNetV3-Small ImageNet backbone and a new linear head, trained on the
+same State Farm split as Experiment A (SimpleCNN).
+
+**Why we used it:** transfer learning is the Brief's second required
+architecture, and freezing the backbone first (training only a small head)
+is the standard first stage before optionally fine-tuning the backbone -
+cheaper, and a fair test of whether generic ImageNet features are already
+useful for this task before spending compute unfreezing them.
+
+**How it works here:** identical pipeline to Experiment A (same driver
+split, same image size, same no-flip augmentation rule) so the only real
+difference between the two runs is the architecture - a deliberate
+controlled comparison, not two runs on different data.
+
+**What the real result was:** on validation, Experiment A scored *higher*
+macro F1 (0.384 vs. 0.310). But on the untouched test set, Experiment B
+scored clearly *higher* (macro F1 0.355 vs. 0.247) and - more importantly -
+never collapsed on any class the way A collapsed on c2/c4. B's own weakness:
+it heavily over-predicts c9 (talking to passenger), including for 227 of 564
+genuinely safe-driving (c0) test images. B is also much slower per image on
+this CPU (55 FPS vs. A's 153 FPS), because a MobileNetV3 forward pass costs
+more than a 3-layer CNN even with the backbone frozen.
+
+**What to say if the professor asks:**
+- "Which model is better?" - by the numbers, B generalizes better to unseen
+  drivers (test macro F1) and fails more gracefully (no class collapse), but
+  A is 3x faster and simpler. Neither is the final choice yet - fine-tuning
+  B's backbone (already supported via `--unfreeze`) is the natural next
+  experiment before deciding.
+- "Then why does the Brief say to pick the model using validation results
+  only?" - that rule exists so the untouched test set stays a fair,
+  once-only final check, not so test results get ignored entirely. Here
+  validation would have picked A, and that's a legitimate real finding
+  worth reporting honestly (rather than switching to "pick whichever wins
+  on test" after peeking, which would defeat the point of holding a test
+  set out) - it also shows a real limitation of this project's setup: only
+  3 drivers in the validation split is a small, high-variance sample, and a
+  larger validation split (more subjects, i.e. the full dataset or more
+  cross-validation folds) would make that selection signal more trustworthy.
+- "Why does B confuse things into c9 so much?" - not yet verified against
+  actual misclassified images (that's the natural follow-up), but a
+  plausible reason is that "talking to a passenger" involves a head turn
+  that's visually intermediate between several other poses, and frozen
+  ImageNet features weren't trained to distinguish fine-grained driver poses
+  in the first place - which is exactly the argument for trying the
+  unfrozen/fine-tuned variant next.
+
 ## 2026-09-17 — `time.time()` deltas are not safe across a system suspend
 
 A background training run's epoch-5 duration was logged as 31,710 seconds
