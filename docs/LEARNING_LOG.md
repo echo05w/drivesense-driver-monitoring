@@ -115,6 +115,57 @@ more than a 3-layer CNN even with the backbone frozen.
   in the first place - which is exactly the argument for trying the
   unfrozen/fine-tuned variant next.
 
+## 2026-09-17 — Fine-tuning the backbone mattered more than the architecture choice
+
+**What it is:** the same `TransferLearningCNN` (MobileNetV3-Small) as
+Experiment B1, but trained with `unfreeze_backbone()` called first and a
+smaller learning rate (1e-4 vs. the head-only run's 1e-3) - conventional
+practice for fine-tuning, since a large LR through pretrained weights tends
+to destroy them before they can adapt.
+
+**Why we used it:** to isolate one variable at a time. B1 already showed
+frozen ImageNet features weren't great fits for dashcam interior images;
+this run tests whether letting those features adapt to the actual domain
+closes that gap, without also changing the architecture.
+
+**How it works here:** identical data, split, and preprocessing as A and
+B1 - the only changes are `unfreeze=True` and `lr=1e-4`.
+
+**What the real result was:** dramatic improvement. Test macro F1 went from
+0.355 (B1, frozen) to 0.697 (B2, fine-tuned) - roughly double - and test
+accuracy from 0.353 to 0.708. Training macro F1 reached 0.99 by the final
+epoch (the model can almost perfectly fit the training images), yet
+validation macro F1 kept improving through epoch 6 (0.578) rather than
+collapsing - meaning the model generalizes despite fitting training data
+very tightly, not just memorizing it. The weakest class stayed c9 (talking
+to passenger, F1 0.361), most often confused with c0 (safe driving) and c8
+(hair/makeup) - all three involve a driver whose hands stay near the wheel
+with only head/torso orientation changing, which is a genuinely hard visual
+distinction.
+
+**What to say if the professor asks:**
+- "What was the single biggest driver of your best result?" - not the
+  architecture (B1 and B2 are the *same* architecture) but whether the
+  pretrained backbone's weights were allowed to update. That is itself a
+  reportable finding, not just a implementation detail.
+- "Why fine-tune with a smaller learning rate?" - a fresh, randomly
+  initialized classifier head can tolerate a large learning rate, but the
+  backbone already encodes useful general-purpose visual features from
+  ImageNet; a large learning rate applied to it risks large, destructive
+  weight updates before the head has learned to use those features
+  sensibly (this is standard transfer-learning practice, not something
+  invented for this project).
+- "Is 0.99 training F1 a red flag for overfitting?" - normally yes, but the
+  validation metric (on completely different drivers) kept improving in the
+  same run, which is the actual test for overfitting, not the train/val gap
+  alone. It's still worth watching in future runs since the gap is large.
+- "Why is c9 still hard even for your best model?" - the confusions (into
+  c0 and c8) all keep the hands near the wheel and vary mainly in head/torso
+  pose, which is a subtler visual signal than "hand holding a phone" or
+  "hand on the radio." This is a real, plausible hypothesis based on the
+  confusion matrix - it hasn't been verified by looking at the actual
+  misclassified frames yet, which is the natural next step.
+
 ## 2026-09-17 — `time.time()` deltas are not safe across a system suspend
 
 A background training run's epoch-5 duration was logged as 31,710 seconds
