@@ -166,6 +166,57 @@ distinction.
   confusion matrix - it hasn't been verified by looking at the actual
   misclassified frames yet, which is the natural next step.
 
+## 2026-09-17 — Real error analysis: looked at actual misclassified images instead of just the confusion matrix
+
+**What it is:** a genuine visual inspection of the fine-tuned transfer
+model's worst class, c9 (talking to passenger, F1 0.361) - sampled real
+test images the model got wrong (predicted c0 or c8 instead) and real
+images it got right, and actually looked at them side by side.
+
+**Why we did it:** a confusion matrix tells you *which* classes get mixed
+up, not *why*. The Brief and the user both explicitly require the "why" to
+come from observed examples, not invented explanations - so instead of
+guessing at a plausible-sounding story, the actual JPEGs were opened.
+
+**How it works here:** loaded the fine-tuned checkpoint, re-ran it over the
+untouched test set once (same predictions as the official evaluation, just
+saved per-image this time to `experiments/distraction/test_predictions_transfer_finetuned.csv`
+so specific rows could be selected), sampled 2 correct and 2 incorrect c9
+examples, and viewed the actual image files.
+
+**What the real result was:** a consistent, visible pattern across every
+sampled image. The two **correctly classified** c9 images both show part of
+another person (the passenger) physically visible in frame - an arm, a
+shoulder - alongside the driver turned to face them, mouth open mid-speech.
+The two **misclassified** c9 images (one predicted c0, one predicted c8)
+show only the driver - no passenger visible in frame - with the driver's
+hand position (on the wheel, or raised near the face/chest) resembling
+"safe driving" or "hair and makeup" respectively more than it resembles any
+distinctive "talking to passenger" pose. This is only 4 images, not a
+systematic audit of all c9 errors, so it's a real, observed lead - not a
+proven, exhaustive explanation.
+
+**What to say if the professor asks:**
+- "How do you know that's the real reason, not a guess?" - because the
+  images were actually opened and compared, not inferred from the
+  confusion matrix alone; the pattern (passenger visible = correct,
+  passenger not visible = wrong) held across every sampled image, though
+  the sample was small (n=4) and this should be checked against more
+  examples before treating it as fully proven.
+- "What does this imply about the class definition itself?" - "talking to
+  passenger" is defined by an interaction with someone who may or may not
+  be in the camera's field of view, which makes it a genuinely harder
+  visual classification problem than e.g. "texting" (a phone is almost
+  always visible) - a fair limitation of the dataset/task, not just the
+  model.
+- "What would you do next?" - systematically check a much larger sample of
+  c9 errors for the same passenger-visibility pattern, and consider
+  whether a differently-cropped input (wider field of view) or a
+  multi-frame/temporal signal (this project's drowsiness pipeline already
+  builds temporal models for a different reason) could help distinguish
+  "talking" from "driving" using motion/duration rather than a single
+  static frame.
+
 ## 2026-09-17 — `time.time()` deltas are not safe across a system suspend
 
 A background training run's epoch-5 duration was logged as 31,710 seconds
