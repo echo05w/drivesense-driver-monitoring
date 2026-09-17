@@ -39,6 +39,49 @@ plan the project is being carried through.
 | 30 | Final rubric audit | Not started | |
 | 31 | Clean reproducibility verification | Not started | |
 
+## Storage strategy (recorded 2026-09-17)
+
+State Farm rules were accepted for real this time (re-verified: the download
+call itself succeeds now, not just file listing) and the full competition
+archive (~4GB) downloaded successfully to `data/raw/distraction/` via
+`scripts/train_distraction.py`'s pipeline.
+
+UTA-RLDD's full-dataset acquisition strategy changed mid-session on the
+user's instruction to protect local laptop storage: the original approach
+(`kaggle datasets download -d rishab260/uta-reallife-drowsiness-dataset`,
+no `-f`) bundles the *entire* mirror into one client-side zip, which turned
+out to be **96.6 GB across 48 subjects** (verified via `kaggle datasets files
+--format json` - not the ~89.2GB estimate from the in-progress download bar,
+which was apparently imprecise) - abandoned at ~13GB partial, deliberately
+not resumed further, deliberately not deleted (disk was never actually tight
+- 350GB+ free throughout - so there was no need to choose between keeping it
+and asking permission to delete it).
+
+Real, verified finding: this Kaggle mirror exposes **145 individually
+downloadable files** (3 videos per subject, addressable by exact path, e.g.
+`Fold4_part2/Fold4_part2/45/0.mp4`), not just one monolithic archive -
+`kaggle datasets download -d <ref> -f <path>` fetches one raw video file
+directly. This enables genuine selective-subject acquisition without
+weakening subject independence: whole subjects (all their sessions) are
+selected as a unit, never partial subjects. New tool:
+`scripts/uta_rldd_pipeline.py` (`index` / `plan` / `fetch` / `validate`
+subcommands) queries the real file index, picks subjects by total size, and
+downloads only those - discovered along the way that Kaggle still wraps even
+a single `-f` file in a `<name>.zip` container, handled by unzipping and
+verifying the extracted size against the index.
+
+Adopted split: **local laptop** keeps only a small selective subject sample
+(a handful of the smallest subjects, a few GB) for pipeline development,
+feature-extraction verification, and smoke-scale drowsiness experiments -
+never the full 96.6GB. **Google Colab** is where the full-scale subject set
+(ideally most/all 48 available subjects) should be acquired and where the
+real, reported drowsiness experiments (temporal vs. single-frame comparison)
+should run, using the same `uta_rldd_pipeline.py fetch` mechanism with a
+larger `--subjects` list and much more available disk/compute. This has not
+yet been executed in Colab - no Colab/browser automation is available in
+this environment, so it remains an instruction for the next Colab session,
+not a claimed execution.
+
 ## Environment notes (recorded 2026-09-16)
 
 - Local machine: no GPU (`nvidia-smi` not present), Python 3.14.7, Arch Linux
