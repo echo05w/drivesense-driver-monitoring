@@ -30,6 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 from typing import Dict, List
@@ -119,6 +120,64 @@ def cmd_plan(args: argparse.Namespace) -> None:
     print(f"\nSuggested command: python scripts/uta_rldd_pipeline.py fetch --subjects {' '.join(chosen)}")
 
 
+def _download_with_stall_retry(
+    remote_name: str,
+    dest_dir: Path,
+    dest_path: Path,
+    stall_seconds: int = 180,
+    poll_seconds: int = 10,
+    max_attempts: int = 5,
+) -> None:
+    """Run `kaggle datasets download -f` with automatic stall recovery.
+
+    Kaggle downloads have been observed (this project's session history) to
+    occasionally hang indefinitely - 0% CPU, no byte progress, no error -
+    rather than raising an exception or timing out on their own. Rather than
+    a blanket subprocess timeout (which would also kill a download that's
+    just genuinely slow), this polls the partial file's size and only kills
+    the process if it hasn't grown at all in `stall_seconds`, then retries -
+    Kaggle's own `.kaggle-partial` marker lets the retry resume rather than
+    restart from zero.
+    """
+    partial_file = dest_dir / f"{Path(remote_name).name}.zip"
+
+    for attempt in range(1, max_attempts + 1):
+        # No stdout=PIPE here deliberately: kaggle's tqdm progress bar writes
+        # frequently, and a pipe we don't actively drain can fill its OS
+        # buffer and make the child block on write() - indistinguishable
+        # from a real stall and liable to trigger a needless kill/retry
+        # loop. Letting it inherit this process's stdout/stderr (already
+        # redirected to a log file by the caller) avoids that entirely.
+        proc = subprocess.Popen(
+            ["kaggle", "datasets", "download", "-d", DATASET_REF, "-f", remote_name, "-p", str(dest_dir)],
+            cwd=REPO_ROOT,
+        )
+        last_size = -1
+        stalled_for = 0
+        while proc.poll() is None:
+            time.sleep(poll_seconds)
+            cur_size = partial_file.stat().st_size if partial_file.exists() else 0
+            if cur_size == last_size:
+                stalled_for += poll_seconds
+            else:
+                stalled_for = 0
+            last_size = cur_size
+            if stalled_for >= stall_seconds:
+                print(f"  STALL detected on {remote_name} (attempt {attempt}) at {cur_size / 1e6:.1f}MB - killing and retrying")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                break
+        else:
+            if proc.returncode == 0:
+                return
+            print(f"  kaggle exited with code {proc.returncode} (attempt {attempt}), retrying")
+
+    raise RuntimeError(f"Failed to download {remote_name} after {max_attempts} attempts")
+
+
 def cmd_fetch(args: argparse.Namespace) -> None:
     index = fetch_index(force=False)
     by_subject = group_by_subject(index)
@@ -146,21 +205,7 @@ def cmd_fetch(args: argparse.Namespace) -> None:
             print(f"SKIP (already present, size matches): {dest_path}")
             continue
         print(f"Downloading {f['name']} -> {dest_path} ({f['size'] / 1e9:.2f} GB)")
-        subprocess.run(
-            [
-                "kaggle",
-                "datasets",
-                "download",
-                "-d",
-                DATASET_REF,
-                "-f",
-                f["name"],
-                "-p",
-                str(dest_dir),
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-        )
+        _download_with_stall_retry(f["name"], dest_dir, dest_path)
         # Kaggle's `-f` single-file download still wraps the file in a zip
         # named "<basename>.zip" (verified empirically - not documented
         # behavior we assumed in advance). Unzip it to the real filename,
