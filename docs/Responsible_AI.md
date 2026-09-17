@@ -1,8 +1,36 @@
 # Responsible AI & Limitations — DriveSense
 
-*Status: initial draft, to be revised with dataset-specific evidence after EDA
-(rubric Criterion 7 requires this to reflect the actual data/model, not just
-generic boilerplate).*
+*Status: revised 2026-09-17 with real evidence from the distraction model's
+EDA, error analysis, and robustness testing (see below); the drowsiness
+sections below remain the original pre-EDA draft since that dataset hasn't
+been trained on yet.*
+
+## Real evidence from the distraction model (2026-09-17)
+
+- **Robustness to image-quality degradation is a genuine, measured
+  weakness, not a theoretical concern.** Re-evaluating the best distraction
+  model (fine-tuned transfer learning) on the same held-out test set under
+  Gaussian blur, Gaussian noise, and JPEG quality-10 recompression each cut
+  macro F1 by roughly 28-35 points (from 0.697 down to 0.35-0.42) - close to
+  halving performance. A real vehicle's camera/lighting/compression
+  conditions vary far more than State Farm's controlled dashcam captures, so
+  this system should not be presented as reliable under real-world image
+  quality without further mitigation (e.g. blur/noise augmentation during
+  training) and re-testing.
+- **One class's accuracy appears to depend on an incidental framing
+  choice, not the intended behavioral signal.** Direct visual inspection of
+  real misclassified images for the "talking to passenger" class showed
+  correct classifications consistently included a visible passenger in
+  frame, while errors did not. If true at scale (only checked on a small
+  sample so far - a systematic check is a documented next step), the model
+  may be partly keying off "is another person visible" rather than the
+  driver's own head/mouth behavior - a spurious-correlation risk worth
+  disclosing rather than presenting the reported per-class score as purely
+  measuring driver behavior recognition.
+- **Reported metrics are from one CPU-only laptop run per model
+  configuration**, not repeated across multiple seeds/hardware - the exact
+  numbers in `README.md` should be read as one real, verified data point
+  per configuration, not as a tightly-bounded estimate.
 
 ## Bias & fairness considerations
 
