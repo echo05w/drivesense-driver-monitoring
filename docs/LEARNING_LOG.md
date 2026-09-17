@@ -5,6 +5,82 @@ history. This is not a duplicate of `docs/Master_Plan_Status.md` (which
 tracks phase completion) — this file records *why* something was done a
 particular way, or a mistake worth not repeating.
 
+## 2026-09-17 — First real trained model: SimpleCNN on State Farm (defense notes)
+
+**What it is:** `SimpleCNN` (`src/drivesense/models/cnn.py`) is a small
+from-scratch convolutional network - three conv+batchnorm+ReLU+maxpool
+blocks, then global average pooling and a linear classifier - trained for
+real on the actual State Farm Distracted Driver Detection dataset (22,424
+labeled dashcam images, 26 drivers, 10 distraction classes).
+
+**Why we used it:** the Brief specifies a from-scratch CNN as the honest
+baseline distraction model, to be compared against a transfer-learning model
+(MobileNetV3-Small) later. A shallow network also trains fast enough to be
+feasible on this CPU-only laptop (no GPU) for a first real result.
+
+**How it works here:** `scripts/train_distraction.py` builds the image
+list from `driver_imgs_list.csv`, splits by *driver* (not by image) using
+`GroupShuffleSplit` so the same person's images can never appear in more
+than one of train/val/test, trains with Adam (lr=1e-3), and deliberately
+does **not** use horizontal-flip augmentation - classes c1-c4 encode
+left/right hand position, so flipping would silently swap their meaning.
+Checkpointing keeps only the epoch with the best validation macro F1, and
+the held-out test set (6 drivers, never touched during training or model
+selection) is evaluated exactly once, at the end.
+
+**What the real result was:** best validation macro F1 was 0.384 (epoch 2);
+training continued to epoch 5 before early-stopping because validation loss
+got worse even as training loss kept improving (train macro F1 reached 0.85)
+- a textbook overfitting signature for a small model with limited
+regularization. On the untouched test set: accuracy 0.333, macro F1 0.247.
+Real error analysis: the model **never once predicts** class c2 or c4
+("talking on phone", right/left) on any of the 4,978 test images - total
+collapse on those two classes - while over-using c1, c5, and especially c7
+as catch-all guesses. A plausible explanation (not yet verified against
+actual images) is that "phone near the ear" poses look visually similar to
+several other poses to a shallow 3-block CNN, and training stopped (at the
+best-validation epoch) before the model had specialized past the more
+visually distinct classes.
+
+**What to say if the professor asks:**
+- "Why macro F1 and not just accuracy?" - the classes are only mildly
+  imbalanced (max/min ratio 1.3), but macro F1 still matters because it
+  weights every class equally, so a model that ignores two classes entirely
+  (like this one does) gets penalized even though overall accuracy looks
+  survivable.
+- "Why split by driver instead of randomly?" - randomly splitting images
+  would let near-duplicate frames of the same driver, seat, and camera
+  angle leak between train and test, inflating the reported score with
+  information the model wouldn't have on a genuinely new driver. Splitting
+  by driver (`subject_independent_split`, with an explicit leakage
+  assertion that's checked and passes every run) measures generalization to
+  people the model has never seen.
+- "Is this the final result?" - no. This is Experiment A (the baseline)
+  from a single run, on a CPU-only laptop, with fairly aggressive early
+  stopping. Experiment B (transfer learning from ImageNet) is the actual
+  comparison point, and neither should be treated as final without more
+  runs/tuning, ideally on Colab GPU.
+- "What would you try next?" - inspect actual misclassified c2/c4 images to
+  see if the visual-similarity theory holds, try class-weighted loss or more
+  epochs before early stopping, and compare against the transfer-learning
+  model before picking a "best" model.
+
+## 2026-09-17 — `time.time()` deltas are not safe across a system suspend
+
+A background training run's epoch-5 duration was logged as 31,710 seconds
+(~8.8 hours) versus 265-349 seconds for every other epoch in the same run.
+Investigated via `journalctl --list-boots` and the kernel log
+(`ACPI: PM: ... system sleep state S3` / `PM: suspend exit` entries) rather
+than guessing - the laptop genuinely suspended for about 9 hours mid-epoch,
+and `time.time() - t0` includes that wall-clock gap even though the process
+was frozen, not computing. **Lesson: on a personal machine that can sleep,
+don't trust a `time.time()`-based duration measurement without sanity-
+checking it against neighboring measurements first - and when reporting an
+anomalous number, verify the actual cause (here, checked system suspend/
+resume logs) rather than either silently keeping a misleading value or
+inventing a "corrected" one.** The run record's `notes` field documents this
+so the number isn't misread later as a real 8.8-hour epoch.
+
 ## 2026-09-17 — "I can list a competition's files" is not "I'm allowed to download them"
 
 Told this session that State Farm competition access had been "handled/

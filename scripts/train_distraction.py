@@ -389,7 +389,7 @@ def cmd_train(args: argparse.Namespace) -> None:
     try:
         import mlflow
 
-        mlflow.set_tracking_uri(f"file:{REPO_ROOT / 'experiments' / 'mlruns'}")
+        mlflow.set_tracking_uri(f"sqlite:///{REPO_ROOT / 'experiments' / 'mlflow.db'}")
         mlflow.set_experiment("drivesense_distraction")
         with mlflow.start_run(run_name=run_id):
             mlflow.log_params(
