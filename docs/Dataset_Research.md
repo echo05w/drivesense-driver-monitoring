@@ -68,6 +68,44 @@ dataset hosting/terms can change.
   deleted) since Kaggle's CLI can resume a `.kaggle-partial`-marked download
   rather than restart from zero, once valid credentials are available again.
 
+## Acquisition attempt log (2026-09-17, second real-credentials session)
+
+- New session-scoped `KAGGLE_API_TOKEN` provided by the user, kept only as an
+  environment variable (never written to any repo file, config, notebook, or
+  commit). Kaggle CLI authenticated; `kaggle competitions list -s state-farm`
+  and `kaggle competitions files -c state-farm-distracted-driver-detection`
+  both succeeded (the files listing even returned real filenames/sizes for
+  `driver_imgs_list.csv` and test images), which could look like access was
+  granted.
+- **However the actual download call still fails**, for both the full
+  archive and a single named file (`driver_imgs_list.csv`), with a
+  definitive answer captured directly from Kaggle's JSON error body (not
+  inferred from a bare `403`):
+  ```
+  HTTP 403 — status: PERMISSION_DENIED
+  reason: "RulesAcceptanceRequired"
+  message: "You must accept this competition's rules before you'll be able
+            to download files."
+  metadata.url: "/competitions/state-farm-distracted-driver-detection/rules"
+  ```
+  **Lesson for next time: being able to list a competition's files is not
+  evidence the download-permission gate has been passed — only the
+  download call itself proves that.** The account behind this token has not
+  actually clicked "I Understand and Accept the Rules" yet, despite an
+  instruction that this had been "handled/checked." Still `BLOCKED_EXTERNAL`
+  — needs the account owner to open the rules URL above while logged in as
+  that account and click accept, not merely view it.
+- **UTA-RLDD (drowsiness):** re-running the same download command against
+  the existing `data/raw/drowsiness/` destination **resumed** from the
+  existing partial file rather than restarting (progress began at 1.60 GB,
+  matching the prior partial, not 0) — confirms Kaggle's `.kaggle-partial`
+  marker does enable a real resume. Discovered in the process: the real
+  total size is **89.2 GB**, not the ~1.5 GB previously assumed to be
+  near-complete — this Kaggle mirror is a large one (closer to the ~111 GB
+  official raw-video figure than hoped), not a lightweight preprocessed
+  subset. At an observed ~6-7 MB/s this will take multiple hours; running in
+  the background, not yet complete, not yet integrity-checked.
+
 ## Known blocker and mitigation
 
 Neither dataset can be downloaded from this local machine without a Kaggle

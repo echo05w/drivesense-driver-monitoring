@@ -5,6 +5,22 @@ history. This is not a duplicate of `docs/Master_Plan_Status.md` (which
 tracks phase completion) — this file records *why* something was done a
 particular way, or a mistake worth not repeating.
 
+## 2026-09-17 — "I can list a competition's files" is not "I'm allowed to download them"
+
+Told this session that State Farm competition access had been "handled/
+checked," the Kaggle token did successfully authenticate and successfully
+listed competition files (real filenames/sizes came back), which looked like
+access was granted. The actual download call still failed, with Kaggle's API
+returning an explicit `RulesAcceptanceRequired` reason in its JSON error
+body. **Lesson: for gated APIs, test the specific permission-bearing action
+itself (here, the download call), not an adjacent read-only action (here,
+listing files) that happens to require the same auth token — a lesser scope
+can succeed while the actual gate is still closed.** Also: when a user
+reports an external blocker as resolved, verify it against the service's own
+authoritative response before updating status to reflect that, especially
+when the service (like Kaggle here) returns a machine-readable, unambiguous
+reason code rather than a generic error.
+
 ## 2026-09-16 — Status docs can lie; verify against the filesystem first
 
 Early in the project, `docs/Master_Plan_Status.md` briefly marked the
