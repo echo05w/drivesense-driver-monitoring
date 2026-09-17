@@ -5,6 +5,23 @@ history. This is not a duplicate of `docs/Master_Plan_Status.md` (which
 tracks phase completion) — this file records *why* something was done a
 particular way, or a mistake worth not repeating.
 
+## 2026-09-17 — UTA-RLDD videos have wildly different fps/resolution across subjects
+
+Real validation of the 6-subject/18-video local sample (`scripts/uta_rldd_pipeline.py validate`,
+which actually opens each video with OpenCV rather than trusting file
+extensions) found 8 distinct frame rates (12-30 fps) and 7 distinct
+resolutions (240x426 up to 1080x1920, mixing portrait and landscape) across
+just 6 subjects - very unlike State Farm's uniform 640x480 images.
+**Lesson: a fixed-length "window" for the temporal drowsiness model must be
+defined in real time (seconds), not frame count** - a 30-frame window is 1
+second at 30fps but 2.5 seconds at 12fps, which would silently mix
+different real-world durations into what's supposed to be a comparable unit
+across subjects. `make_feature_windows` (`src/drivesense/data/datasets.py`)
+currently windows by raw row count; before running it for real, resample to
+a common fps (or convert `window_size`/`stride` to a seconds-based
+calculation per video) rather than assuming the synthetic-fixture tests'
+implicit uniform-fps assumption holds for real data.
+
 ## 2026-09-17 — First real trained model: SimpleCNN on State Farm (defense notes)
 
 **What it is:** `SimpleCNN` (`src/drivesense/models/cnn.py`) is a small
