@@ -70,6 +70,22 @@ projects. See `docs/GOV01_Preserved_Note.md`.
 - **No local GPU** in this environment — actual training happens in Google
   Colab. Local work is scaffolding, docs, lightweight EDA/tests, and code
   that will run for real in Colab.
+- **Confirmed local-memory boundary (2026-09-17): do not retry MediaPipe
+  landmark extraction on this machine.** `MediaPipeLandmarkExtractor()`
+  construction has been OOM-killed here on every attempt (three confirmed
+  instances across two sessions, including with more free RAM than usual —
+  see `docs/LEARNING_LOG.md`). This is a real, external desktop-memory
+  constraint, not a code bug (the same code is unit-tested correct via a
+  fake extractor in `tests/test_drowsiness.py`/`tests/test_landmarks.py`).
+  All drowsiness feature extraction and training now happens in
+  `notebooks/02_Drowsiness_Colab_Pipeline.ipynb`, which has been prepared
+  (built, syntax-validated cell-by-cell, and had its full non-MediaPipe
+  pipeline logic — windowing, subject-independent split, training,
+  checkpointing/resume, evaluation — proven end-to-end against synthetic
+  data) but **not yet executed for real** as of this note. Do not attempt
+  the MediaPipe extraction locally again; do not claim the notebook has
+  produced results until it has actually been run in Colab and real output
+  observed.
 
 ## Definition of Done
 

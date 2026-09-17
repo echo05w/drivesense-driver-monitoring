@@ -5,6 +5,59 @@ history. This is not a duplicate of `docs/Master_Plan_Status.md` (which
 tracks phase completion) — this file records *why* something was done a
 particular way, or a mistake worth not repeating.
 
+## 2026-09-17 — Confirmed local-memory boundary: MediaPipe moves to Colab, and how a Colab notebook was validated without running the blocked step
+
+After a third confirmed OOM-kill of `MediaPipeLandmarkExtractor()` on this
+machine (same failure as before, even with more free RAM than the original
+attempt), the decision was made to stop retrying locally and move all
+drowsiness feature extraction/training to Google Colab
+(`notebooks/02_Drowsiness_Colab_Pipeline.ipynb`).
+
+**The interesting problem this created: how do you validate a notebook you
+cannot run?** The notebook depends on `google.colab.drive`, a real GPU/RAM
+environment, and the exact MediaPipe workload that's blocked here. Three
+layers of validation were used instead of just "it looks right":
+
+1. **Structural/syntax validation** — `nbformat.validate()` plus parsing
+   every code cell's Python (Jupyter `!`/`%` magic lines stripped first,
+   since they aren't standalone Python syntax) caught nothing on its own
+   but is a cheap first gate.
+2. **Whole-notebook static analysis** — concatenating every code cell in
+   order and running `pyflakes` over the result caught the kind of mistake
+   per-cell syntax checking can't: e.g. a variable used in cell 30 that was
+   never actually defined in any earlier cell would show up as an undefined
+   name. Only harmless, intentional re-imports were flagged.
+3. **Real execution of everything that doesn't need MediaPipe or Colab** —
+   the notebook's windowing, subject-independent splitting, training loop,
+   checkpointing, and evaluation logic don't actually need real video or a
+   Colab runtime; they need real *tensors*. A synthetic multi-subject,
+   multi-fps dataset was generated, and the notebook's own
+   `train_torch_model` function source was extracted directly from its cell
+   and executed (not reimplemented) against that synthetic data — proving
+   the actual code that will run in Colab composes correctly end-to-end,
+   including a deliberate simulated-disconnect test (train once, checkpoint,
+   construct a fresh model object, call the same function again with the
+   same checkpoint path, and verify via `torch.equal` that it loads
+   bit-identical weights rather than silently retraining).
+
+**Lesson: "I can't run the expensive/blocked part" is not the same as "I
+can't validate anything."** Separate what a pipeline needs from what a
+*specific step* needs, and real-execute everything in the first category
+even when the second is genuinely out of reach. This is different from
+(and stronger than) just re-reading the code carefully — it catches
+composition bugs (wrong variable names, wrong array shapes, wrong argument
+order between two functions that were each individually correct) that pure
+reading is more likely to miss.
+
+**What to say if the professor asks "how do you know the Colab notebook
+will work if you never ran it?":** the parts that are testable without
+Colab/MediaPipe were actually executed and passed (windowing, splitting,
+leakage assertions, training, checkpointing, resume, evaluation, model
+selection) using the exact function source Colab will run; the one part
+that couldn't be — real MediaPipe extraction over real video — is exactly
+the part this machine cannot run at all, which is the whole reason the
+notebook exists. That's disclosed explicitly, not glossed over.
+
 ## 2026-09-17 — UTA-RLDD videos have wildly different fps/resolution across subjects
 
 Real validation of the 6-subject/18-video local sample (`scripts/uta_rldd_pipeline.py validate`,
