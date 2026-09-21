@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import random
 import subprocess
@@ -74,20 +75,61 @@ def git_commit_hash() -> str:
         return "unknown"
 
 
-def build_transforms(image_size: int):
+def _random_gaussian_blur(img):
+    # Radius range chosen around robustness_distraction.py's fixed test-time
+    # r=2.0 probe, so training sees comparable-or-milder blur than it's
+    # evaluated against.
+    from PIL import ImageFilter
+
+    radius = random.uniform(0.0, 2.0)
+    return img.filter(ImageFilter.GaussianBlur(radius=radius))
+
+
+def _random_gaussian_noise(img):
+    # Sigma range centered below robustness_distraction.py's sigma=25 probe.
+    import numpy as np
+    from PIL import Image as PILImage
+
+    sigma = random.uniform(0.0, 25.0)
+    arr = np.asarray(img).astype(np.float32)
+    noise = np.random.normal(0, sigma, arr.shape)
+    return PILImage.fromarray(np.clip(arr + noise, 0, 255).astype(np.uint8))
+
+
+def _random_jpeg_recompress(img):
+    # Quality range spans down to robustness_distraction.py's quality=10 probe.
+    from PIL import Image as PILImage
+
+    quality = random.randint(10, 90)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality)
+    buf.seek(0)
+    return PILImage.open(buf).convert("RGB")
+
+
+def build_transforms(image_size: int, robustness_augment: bool = False):
     # No horizontal flip: classes c1-c4 are left/right-hand-specific
     # (see drivesense.data.state_farm.HORIZONTAL_FLIP_SAFE) - flipping would
     # silently invert those labels.
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    train_tf = transforms.Compose(
-        [
-            transforms.Resize((image_size, image_size)),
-            transforms.RandomRotation(8),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
-            transforms.ToTensor(),
-            normalize,
+    train_steps = [
+        transforms.Resize((image_size, image_size)),
+        transforms.RandomRotation(8),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2),
+    ]
+    if robustness_augment:
+        # Each applied independently at p=0.3 so most images see 0-1 of these,
+        # matching real-world degradation being occasional, not universal -
+        # added in response to the real finding in Phase 17 robustness
+        # testing (experiments/distraction/transfer_20260917_194003_robustness.json)
+        # that blur/noise/JPEG recompression roughly halved macro F1.
+        train_steps += [
+            transforms.RandomApply([transforms.Lambda(_random_gaussian_blur)], p=0.3),
+            transforms.RandomApply([transforms.Lambda(_random_gaussian_noise)], p=0.3),
+            transforms.RandomApply([transforms.Lambda(_random_jpeg_recompress)], p=0.3),
         ]
-    )
+    train_steps += [transforms.ToTensor(), normalize]
+    train_tf = transforms.Compose(train_steps)
     eval_tf = transforms.Compose(
         [
             transforms.Resize((image_size, image_size)),
@@ -281,7 +323,7 @@ def cmd_train(args: argparse.Namespace) -> None:
     if args.max_val_samples is not None:
         val_df = val_df.iloc[: args.max_val_samples].reset_index(drop=True)
 
-    train_tf, eval_tf = build_transforms(args.image_size)
+    train_tf, eval_tf = build_transforms(args.image_size, robustness_augment=args.robustness_augment)
     train_ds = DistractionImageDataset(train_df, transform=train_tf)
     val_ds = DistractionImageDataset(val_df, transform=eval_tf)
 
@@ -364,6 +406,7 @@ def cmd_train(args: argparse.Namespace) -> None:
         "seed": args.seed,
         "model": args.model,
         "unfrozen_backbone": args.unfreeze,
+        "robustness_augment": args.robustness_augment,
         "image_size": args.image_size,
         "batch_size": args.batch_size,
         "optimizer": "Adam",
@@ -498,6 +541,7 @@ def cmd_smoke_train(args: argparse.Namespace) -> None:
     args.patience = 0
     args.max_train_samples = 16
     args.max_val_samples = 8
+    args.robustness_augment = False
     print("=== SMOKE TRAIN: tiny subset, 1 epoch, checkpoint round-trip ===")
     cmd_train(args)
 
@@ -540,6 +584,16 @@ def main() -> None:
     )
     p_train.add_argument("--num-workers", type=int, default=2, dest="num_workers")
     p_train.add_argument("--patience", type=int, default=3)
+    p_train.add_argument(
+        "--robustness-augment",
+        action="store_true",
+        dest="robustness_augment",
+        help=(
+            "Add random blur/noise/JPEG-quality degradation to training "
+            "transforms, to address the real robustness gap found in "
+            "scripts/robustness_distraction.py (see docs/Master_Plan_Status.md #17)."
+        ),
+    )
     p_train.add_argument("--max-train-samples", type=int, default=None, dest="max_train_samples")
     p_train.add_argument("--max-val-samples", type=int, default=None, dest="max_val_samples")
     p_train.set_defaults(func=cmd_train)
