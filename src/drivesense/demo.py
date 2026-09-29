@@ -279,6 +279,11 @@ def run(args: argparse.Namespace) -> dict:
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         display_size = (640, 480)
         writer = cv2.VideoWriter(out_path, fourcc, 15.0, display_size)
+        if args.max_frames is None and (args.source == "0" or args.source.isdigit()):
+            print("[demo] Running continuously on the live webcam - press Ctrl+C to stop "
+                  "(the output video is finalized cleanly on interrupt). Use --max-frames "
+                  "N for a bounded/automated run.")
+        last_print = time.time()
         try:
             while args.max_frames is None or n_frames < args.max_frames:
                 ret, frame_bgr = cap.read()
@@ -294,6 +299,19 @@ def run(args: argparse.Namespace) -> dict:
                 annotated = cv2.resize(annotated, display_size)
                 writer.write(annotated)
                 n_frames += 1
+                # Live progress feedback (a presenter watching stdout should
+                # see this is actually running, not just a silent hang until
+                # the process exits/is interrupted).
+                if time.time() - last_print >= 1.0 and last_state is not None:
+                    print(
+                        f"[demo] frame {n_frames} | {last_state['distraction_class'] or 'n/a'} "
+                        f"({last_state['distraction_pct'] or 'n/a'}) | "
+                        f"drowsiness {last_state['drowsiness_pct'] or 'n/a'} | "
+                        f"risk {last_state['risk_level']} | {fps_estimate:.1f} FPS"
+                    )
+                    last_print = time.time()
+        except KeyboardInterrupt:
+            print(f"\n[demo] Stopped by user after {n_frames} frames.")
         finally:
             cap.release()
             writer.release()
