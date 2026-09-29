@@ -31,3 +31,6 @@ ipykernel>=6.29
 
 # Testing
 pytest>=8.0
+
+# Presenter-friendly GUI (app.py) — reuses the same pipeline as demo.py
+streamlit>=1.60

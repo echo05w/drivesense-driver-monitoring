@@ -225,6 +225,27 @@ real fused-label ground truth this project does not have). Two layers exist:
 
 ## Demo
 
+**Presenter GUI (recommended for a live demo — no terminal interaction needed):**
+
+```bash
+streamlit run app.py
+```
+
+Opens a browser dashboard: a live camera panel, big status cards
+(distraction class/confidence, drowsiness, awareness, risk), a color-coded
+LOW/MEDIUM/HIGH/CRITICAL risk badge, and Start/Stop/Reset buttons plus an
+image/video upload option — reuses the exact same pipeline as `demo.py`
+below (no model logic duplicated). Genuinely tested end-to-end this
+session (real webcam capture, real inference, live-updating cards, a
+low-light auto-brightened preview for visibility, honest "unavailable / no
+face detected" when the fallback finds no face — never a fabricated
+number). **Known caveat:** if the browser tab is closed/reloaded without
+clicking "Stop camera" first, the webcam can stay held by the old session
+until the Streamlit process is restarted — click Stop before navigating
+away.
+
+**Command-line demo:**
+
 ```bash
 python demo.py --source 0                    # webcam (falls back cleanly if none is available)
 python demo.py --source path/to/video.mp4    # any video file
