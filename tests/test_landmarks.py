@@ -13,6 +13,9 @@ Colab or when enough local memory is free), not in the automated suite.
 from types import SimpleNamespace
 
 from drivesense.features.landmarks import (
+    HAAR_EAR_CLOSED,
+    HAAR_EAR_HALF,
+    HAAR_EAR_OPEN,
     LEFT_EYE_IDX,
     OUTER_MOUTH_IDX,
     RIGHT_EYE_IDX,
@@ -20,6 +23,7 @@ from drivesense.features.landmarks import (
     _estimate_head_pose,
     _no_face_result,
     download_face_landmarker_model,
+    features_from_face_and_eyes,
 )
 
 
@@ -70,3 +74,55 @@ def test_download_face_landmarker_model_is_idempotent(tmp_path):
     assert path1 == path2 == dest
     assert mtime1 == mtime2
     assert dest.stat().st_size > 0
+
+
+# --- HaarCascadeLandmarkExtractor's pure logic (no cascade/network needed) --
+
+
+def test_features_from_face_and_eyes_no_face_is_no_face_result():
+    result = features_from_face_and_eyes(face_bbox=None, eye_bboxes=[], frame_width=640)
+    assert result.face_detected is False
+    assert result == _no_face_result()
+
+
+def test_features_from_face_and_eyes_two_eyes_is_open_proxy():
+    result = features_from_face_and_eyes(
+        face_bbox=(270, 100, 100, 100),
+        eye_bboxes=[(10, 20, 20, 10), (60, 20, 20, 10)],
+        frame_width=640,
+    )
+    assert result.face_detected is True
+    assert result.left_ear == result.right_ear == HAAR_EAR_OPEN
+    assert result.mar == 0.0  # unavailable via Haar cascades — documented limitation
+
+
+def test_features_from_face_and_eyes_no_eyes_is_closed_proxy():
+    result = features_from_face_and_eyes(
+        face_bbox=(270, 100, 100, 100), eye_bboxes=[], frame_width=640
+    )
+    assert result.left_ear == result.right_ear == HAAR_EAR_CLOSED
+
+
+def test_features_from_face_and_eyes_one_eye_is_half_proxy():
+    result = features_from_face_and_eyes(
+        face_bbox=(270, 100, 100, 100), eye_bboxes=[(10, 20, 20, 10)], frame_width=640
+    )
+    assert result.left_ear == result.right_ear == HAAR_EAR_HALF
+
+
+def test_features_from_face_and_eyes_centered_face_near_zero_yaw():
+    result = features_from_face_and_eyes(
+        face_bbox=(270, 100, 100, 100),  # center x = 320, frame center = 320
+        eye_bboxes=[(10, 20, 20, 10), (60, 20, 20, 10)],
+        frame_width=640,
+    )
+    assert abs(result.head_yaw_deg) < 1e-6
+
+
+def test_features_from_face_and_eyes_face_shifted_right_gives_positive_yaw():
+    result = features_from_face_and_eyes(
+        face_bbox=(400, 100, 100, 100),  # center x = 450, right of frame center 320
+        eye_bboxes=[(10, 20, 20, 10), (60, 20, 20, 10)],
+        frame_width=640,
+    )
+    assert result.head_yaw_deg > 0

@@ -18,7 +18,7 @@ import math
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Protocol, Tuple
+from typing import List, Optional, Protocol, Sequence, Tuple
 
 from drivesense.utils.geometry import eye_aspect_ratio, mouth_aspect_ratio
 
@@ -162,4 +162,167 @@ class MediaPipeLandmarkExtractor:
             head_yaw_deg=yaw,
             head_roll_deg=roll,
             face_detected=True,
+        )
+
+
+# --- Lightweight local fallback (Haar cascades) --------------------------
+#
+# `MediaPipeLandmarkExtractor` cannot be constructed on this development
+# machine (OOM-killed, see its docstring above and docs/Master_Plan_Status.md
+# / CLAUDE.md — a confirmed, do-not-retry local boundary). It is NOT
+# retried here. Instead, `HaarCascadeLandmarkExtractor` below is a genuinely
+# real, much lighter-weight (no big task-graph, no ~10s+ init) alternative
+# built entirely on `cv2.CascadeClassifier`, so `scripts/demo.py` can show a
+# real (if coarse) local drowsiness signal instead of no signal at all.
+#
+# Honesty/limits, stated explicitly because this project's own conventions
+# require it (see CLAUDE.md "Never fabricate"):
+#   - This is an approximation, not a substitute for MediaPipe's 468-point
+#     mesh. Haar cascades return bounding boxes, not landmark points, so a
+#     true 6-point geometric EAR/MAR (Soukupova & Cech) cannot be computed
+#     from them.
+#   - `left_ear`/`right_ear` here are a coarse, discrete open/closed proxy
+#     (not a continuous ratio): eyes detected inside the face ROI -> "open"
+#     value, not detected -> "closed" value. This is the same
+#     detection-dropout heuristic used by several lightweight blink-detector
+#     tutorials that rely on Haar cascades, not an invented technique — but
+#     it is materially less precise than real EAR, and is intended only for
+#     enabling a local CLI demo, never as a research-grade drowsiness signal.
+#   - `mar` is always 0.0 here: no maintained, licensable mouth cascade
+#     ships with this project's OpenCV build, so yawning cannot be detected
+#     through this fallback path at all (see `docs/Master_Plan_Status.md`).
+#   - Head pose is a crude horizontal-offset-only yaw proxy from the face
+#     bounding box position in-frame; pitch/roll are always 0.0.
+#   - The trained temporal drowsiness model
+#     (`drivesense.models.temporal.DrowsinessGRU` /
+#     `DrowsinessTemporalCNN`) is trained on the real MediaPipe feature
+#     schema (`FEATURE_COLUMNS` in `drivesense.data.drowsiness`) via the
+#     Colab pipeline, and MUST NOT be fed this fallback extractor's output
+#     as if it were equivalent input — the two are numerically different
+#     scales. `scripts/demo.py` therefore only ever drives the *rule-based*
+#     PERCLOS-style drowsiness score (`drivesense.inference.drowsiness`)
+#     from this fallback, never the untrained/incompatible neural model.
+
+HAAR_FACE_CASCADE_URL = (
+    "https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/"
+    "haarcascade_frontalface_default.xml"
+)
+HAAR_EYE_CASCADE_URL = (
+    "https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/"
+    "haarcascade_eye.xml"
+)
+DEFAULT_HAAR_FACE_PATH = Path.home() / ".cache" / "drivesense" / "haarcascade_frontalface_default.xml"
+DEFAULT_HAAR_EYE_PATH = Path.home() / ".cache" / "drivesense" / "haarcascade_eye.xml"
+
+# Coarse open/closed EAR-proxy values. Chosen so they land clearly on either
+# side of a typical MediaPipe-based closed-eye threshold (~0.2, see
+# `drivesense.inference.drowsiness`) without claiming false precision.
+HAAR_EAR_OPEN = 0.30
+HAAR_EAR_HALF = 0.20
+HAAR_EAR_CLOSED = 0.05
+
+BBox = Tuple[int, int, int, int]  # x, y, w, h
+
+
+def download_haar_cascade(url: str, dest: Path) -> Path:
+    """Download a Haar cascade XML file if not already cached locally."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not dest.exists():
+        urllib.request.urlretrieve(url, dest)
+    return dest
+
+
+def features_from_face_and_eyes(
+    face_bbox: Optional[BBox],
+    eye_bboxes: Sequence[BBox],
+    frame_width: int,
+) -> FrameLandmarkFeatures:
+    """Pure-logic core of the Haar fallback: bounding boxes -> features.
+
+    Kept separate from `HaarCascadeLandmarkExtractor.extract()` so it is
+    unit-testable without OpenCV cascade files/network access, the same
+    separation `_estimate_head_pose` already gives the MediaPipe path.
+    """
+    if face_bbox is None:
+        return _no_face_result()
+
+    n_eyes = min(len(eye_bboxes), 2)
+    if n_eyes == 2:
+        ear_proxy = HAAR_EAR_OPEN
+    elif n_eyes == 1:
+        ear_proxy = HAAR_EAR_HALF
+    else:
+        ear_proxy = HAAR_EAR_CLOSED
+
+    fx, _fy, fw, _fh = face_bbox
+    face_center_x = fx + fw / 2.0
+    frame_center_x = frame_width / 2.0
+    # Same directional convention as `_estimate_head_pose`: positive yaw ==
+    # face/nose shifted toward the right of frame.
+    yaw_deg = ((face_center_x - frame_center_x) / max(frame_width / 2.0, 1e-6)) * 45.0
+
+    return FrameLandmarkFeatures(
+        left_ear=ear_proxy,
+        right_ear=ear_proxy,
+        mar=0.0,  # unavailable via Haar cascades in this build — see module note above
+        head_pitch_deg=0.0,
+        head_yaw_deg=yaw_deg,
+        head_roll_deg=0.0,
+        face_detected=True,
+    )
+
+
+class HaarCascadeLandmarkExtractor:
+    """Lightweight local fallback implementing the `LandmarkExtractor` protocol.
+
+    Real detection (genuinely runs `cv2.CascadeClassifier.detectMultiScale`
+    on each frame), but a coarse approximation of true landmark-based
+    EAR/MAR — see the module-level note above before using its output
+    anywhere results are reported as if MediaPipe-equivalent.
+    """
+
+    def __init__(
+        self,
+        face_cascade_path: Optional[Path] = None,
+        eye_cascade_path: Optional[Path] = None,
+    ) -> None:
+        import cv2
+
+        face_cascade_path = face_cascade_path or download_haar_cascade(
+            HAAR_FACE_CASCADE_URL, DEFAULT_HAAR_FACE_PATH
+        )
+        eye_cascade_path = eye_cascade_path or download_haar_cascade(
+            HAAR_EYE_CASCADE_URL, DEFAULT_HAAR_EYE_PATH
+        )
+        self._cv2 = cv2
+        self._face_cascade = cv2.CascadeClassifier(str(face_cascade_path))
+        self._eye_cascade = cv2.CascadeClassifier(str(eye_cascade_path))
+        if self._face_cascade.empty() or self._eye_cascade.empty():
+            raise RuntimeError(
+                "Failed to load Haar cascade XML files "
+                f"({face_cascade_path}, {eye_cascade_path}) — they may be "
+                "corrupt or incompletely downloaded; delete and retry."
+            )
+
+    def extract(self, frame_rgb) -> FrameLandmarkFeatures:
+        """Extract coarse open/closed-eye + yaw-proxy features from one RGB frame."""
+        cv2 = self._cv2
+        gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
+        frame_height, frame_width = gray.shape[:2]
+
+        faces = self._face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+        if len(faces) == 0:
+            return _no_face_result()
+
+        # Largest detected face, in case of spurious secondary detections.
+        fx, fy, fw, fh = max(faces, key=lambda b: b[2] * b[3])
+        # Eyes sit in the upper ~60% of the face box; restricting the search
+        # region reduces false eye-like detections from mouth/nostril texture.
+        eye_region = gray[fy : fy + int(fh * 0.6), fx : fx + fw]
+        eyes = self._eye_cascade.detectMultiScale(eye_region, scaleFactor=1.1, minNeighbors=8, minSize=(15, 15))
+
+        return features_from_face_and_eyes(
+            face_bbox=(int(fx), int(fy), int(fw), int(fh)),
+            eye_bboxes=[tuple(int(v) for v in e) for e in eyes],
+            frame_width=frame_width,
         )
