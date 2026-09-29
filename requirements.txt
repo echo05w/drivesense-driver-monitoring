@@ -6,7 +6,12 @@ matplotlib>=3.8
 seaborn>=0.13
 
 # Computer vision / face landmarks
-opencv-python-headless>=4.9
+# Pinned to <5: opencv-python-headless 5.0.0 removed the CascadeClassifier
+# Python binding entirely (replaced by the DNN-based FaceDetectorYN/YuNet) -
+# drivesense.features.landmarks.HaarCascadeLandmarkExtractor depends on it.
+# Confirmed via `strings` on the 5.0.0.93 .so: no CascadeClassifier symbol
+# exists in that build at all, not a packaging issue.
+opencv-python-headless>=4.9,<5
 mediapipe>=0.10
 Pillow>=10.0
 

@@ -341,6 +341,17 @@ pip install -r requirements.txt
 pip install -e .   # makes the `drivesense` package importable for tests/notebooks
 ```
 
+Environment as verified this session: Python 3.14.7, `torch==2.14.0+cpu`,
+`torchvision==0.29.0+cpu`, `opencv-python-headless==4.14.0.94` (pinned
+`<5` in `requirements.txt` — OpenCV 5.0 removed the `CascadeClassifier`
+Python binding the local drowsiness fallback depends on; see
+`docs/LEARNING_LOG.md`, "An unpinned opencv-python-headless..."). If
+`import cv2` succeeds but every attribute access fails, that's a broken/
+partial install (e.g. a leftover empty `cv2/` directory from a failed
+manual `pip install`), not a code bug — `pip list | grep opencv` should
+show a real installed version; if not, remove any stray `cv2*`/`opencv*`
+directories under `.venv/lib/python*/site-packages/` and reinstall.
+
 Run the test suite (geometry/EAR-MAR math, subject-independent splitting,
 both risk-fusion engines, drowsiness PERCLOS scoring, the Haar-cascade
 fallback's pure logic, the demo's error-handling paths, State Farm metadata

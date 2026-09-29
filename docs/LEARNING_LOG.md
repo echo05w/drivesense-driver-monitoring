@@ -5,6 +5,45 @@ history. This is not a duplicate of `docs/Master_Plan_Status.md` (which
 tracks phase completion) — this file records *why* something was done a
 particular way, or a mistake worth not repeating.
 
+## 2026-09-29 — An unpinned `opencv-python-headless>=4.9` silently jumped to a major version that removed the API this project depends on
+
+A manual attempt (outside this project's own scripts) to
+`pip install opencv-python==4.12.0.88` failed because that exact version's
+declared numpy constraint forced a source build of an old numpy release
+under Python 3.14 (no prebuilt wheel available for that combination) — and
+the failed attempt left a broken, empty `cv2/` namespace-package directory
+in `.venv/lib/python3.14/site-packages/` that shadowed any real install,
+so `import cv2` "succeeded" but every attribute access failed.
+
+Deleting that broken directory and reinstalling per this project's own
+`requirements.txt` pin (`opencv-python-headless>=4.9`, no upper bound)
+resolved to the newest available release, **`5.0.0.93`** — which does not
+have this problem, but does have a different, real one:
+**`hasattr(cv2, "CascadeClassifier")` is `False`**. Verified via `strings`
+on the compiled `.so` that the symbol is genuinely absent from that build,
+not a lazy-loading/packaging quirk — OpenCV 5.0's Python bindings dropped
+the legacy Haar `CascadeClassifier` API in favor of the DNN-based
+`FaceDetectorYN` (YuNet). `drivesense.features.landmarks.HaarCascadeLandmarkExtractor`
+(added the previous session as the local MediaPipe fallback) depends
+directly on `CascadeClassifier`, so this broke the drowsiness fallback
+silently on any fresh `pip install -r requirements.txt` from this point
+forward, despite the pin technically being satisfied.
+
+**Fix:** pinned `opencv-python-headless>=4.9,<5` in `requirements.txt`.
+`4.14.0.94` (the newest 4.x release) has a real prebuilt wheel for
+Python 3.14 + numpy 2.5 (no source build) and does have
+`CascadeClassifier` — confirmed working end-to-end again (real face/eye
+detection on real UTA-RLDD video, real demo run on the live webcam).
+
+**Lesson: an unpinned major-version floor (`>=X`) on a library this
+project has a real, load-bearing dependency on can silently break that
+dependency on a fresh install, long after the code that depends on it was
+written and tested** — pin an upper bound once a specific API surface (not
+just "the package") is depended on, and when a library import
+"succeeds" but every attribute access then fails, suspect a broken/partial
+install (check `pip list` actually shows the package, not just that
+`import` doesn't raise) before assuming the API changed.
+
 ## 2026-09-17 — Confirmed local-memory boundary: MediaPipe moves to Colab, and how a Colab notebook was validated without running the blocked step
 
 After a third confirmed OOM-kill of `MediaPipeLandmarkExtractor()` on this
